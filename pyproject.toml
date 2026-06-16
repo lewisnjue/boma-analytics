@@ -1,7 +1,7 @@
 [project]
 name = "boma-analytics"
 version = "0.1.0"
-description = "Kenyan real estate data ingestion and analytics"
+description = "Kenyan real estate data  analytics"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
