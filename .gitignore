@@ -229,3 +229,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Scraped raw data (keep directory placeholder)
+data/raw/**/*
+!data/raw/.gitkeep

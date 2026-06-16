@@ -1,0 +1,13 @@
+sources:
+  buyrentkenya:
+    base_url: "https://www.buyrentkenya.com"
+    search_path: "/houses-for-sale"
+    request_timeout: 15
+    request_delay_seconds: 1.0
+    user_agent: "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    max_pages: null  # null = scrape all pages; set to an integer to limit during testing
+    fetch_details: true
+
+output:
+  raw_dir: "data/raw"
+  source_name: "buyrentkenya"
