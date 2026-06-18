@@ -1,35 +1,3 @@
-  config-path:
-    description: "Path to config.yaml"
-    required: false
-    default: "config/config.yaml"
-  output-dir:
-    description: "Optional output directory for raw JSON files"
-    required: false
-    default: ""
-  buyrent-max-pages:
-    description: "Limit BuyRentKenya pages"
-    required: false
-    default: ""
-  buyrent-no-details:
-    description: "Skip BuyRentKenya detail pages"
-    required: false
-    default: "false"
-  buyrent-listing-type:
-    description: "Which BuyRentKenya listing type to scrape"
-    required: false
-    default: "houses"
-  prop24-max-pages:
-    description: "Limit Property24 pages"
-    required: false
-    default: ""
-  prop24-no-details:
-    description: "Skip Property24 detail pages"
-    required: false
-    default: "false"
-  verbose:
-    description: "Enable debug logging"
-    required: false
-    default: "false"
 name: "Run DB ingestion (runner)"
 description: "Run parallel website scraping and store results in MongoDB on the runner."
 inputs:
