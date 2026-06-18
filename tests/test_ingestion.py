@@ -1,16 +1,15 @@
 from pathlib import Path
 
 import pytest
-
-from boma_analytics.ingestion import (
+from boma_analytics.sources import (
     BuyRentKenyaClient,
     BuyRentKenyaConfig,
+)
+from boma_analytics.sources.buyrentkenya import (
     parse_listing_card,
-    parse_price_kes,
+    parse_price_kes
 )
 from boma_analytics.sources.property24 import (
-    Property24Client,
-    Property24Config,
     parse_property24_listing_card,
 )
 
