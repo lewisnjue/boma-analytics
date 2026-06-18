@@ -1,5 +1,37 @@
-name: "Run DB ingestion"
-description: "Run parallel website scraping and store results in MongoDB."
+  config-path:
+    description: "Path to config.yaml"
+    required: false
+    default: "config/config.yaml"
+  output-dir:
+    description: "Optional output directory for raw JSON files"
+    required: false
+    default: ""
+  buyrent-max-pages:
+    description: "Limit BuyRentKenya pages"
+    required: false
+    default: ""
+  buyrent-no-details:
+    description: "Skip BuyRentKenya detail pages"
+    required: false
+    default: "false"
+  buyrent-listing-type:
+    description: "Which BuyRentKenya listing type to scrape"
+    required: false
+    default: "houses"
+  prop24-max-pages:
+    description: "Limit Property24 pages"
+    required: false
+    default: ""
+  prop24-no-details:
+    description: "Skip Property24 detail pages"
+    required: false
+    default: "false"
+  verbose:
+    description: "Enable debug logging"
+    required: false
+    default: "false"
+name: "Run DB ingestion (runner)"
+description: "Run parallel website scraping and store results in MongoDB on the runner."
 inputs:
   config-path:
     description: "Path to config.yaml"
@@ -33,6 +65,40 @@ inputs:
     description: "Enable debug logging"
     required: false
     default: "false"
+
 runs:
-  using: "docker"
-  image: "Dockerfile"
+  using: "composite"
+  steps:
+    - name: Run DB ingest script
+      shell: bash
+      env:
+        MONGODB_URL: "${{ env.MONGODB_URL }}"
+      run: |
+        set -euo pipefail
+        cmd=("./scripts/run_parallel_ingest_db.sh")
+        if [[ -n "${{ inputs.config-path }}" ]]; then
+          cmd+=("--config" "${{ inputs.config-path }}")
+        fi
+        if [[ -n "${{ inputs.output-dir }}" ]]; then
+          cmd+=("--output-dir" "${{ inputs.output-dir }}")
+        fi
+        if [[ -n "${{ inputs.buyrent-max-pages }}" ]]; then
+          cmd+=("--buyrent-max-pages" "${{ inputs.buyrent-max-pages }}")
+        fi
+        if [[ "${{ inputs.buyrent-no-details }}" == "true" ]]; then
+          cmd+=("--buyrent-no-details")
+        fi
+        if [[ -n "${{ inputs.buyrent-listing-type }}" ]]; then
+          cmd+=("--buyrent-listing-type" "${{ inputs.buyrent-listing-type }}")
+        fi
+        if [[ -n "${{ inputs.prop24-max-pages }}" ]]; then
+          cmd+=("--prop24-max-pages" "${{ inputs.prop24-max-pages }}")
+        fi
+        if [[ "${{ inputs.prop24-no-details }}" == "true" ]]; then
+          cmd+=("--prop24-no-details")
+        fi
+        if [[ "${{ inputs.verbose }}" == "true" ]]; then
+          cmd+=("-v")
+        fi
+        echo "Running: ${cmd[*]}"
+        "${cmd[@]}"
