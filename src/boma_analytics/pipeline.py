@@ -40,7 +40,8 @@ def run_buyrentkenya_ingestion(
         request_timeout=source_cfg["request_timeout"],
         request_delay_seconds=source_cfg["request_delay_seconds"],
         user_agent=source_cfg["user_agent"],
-        max_pages=max_pages if max_pages is not None else source_cfg.get("max_pages"),
+        max_pages=max_pages if max_pages is not None else source_cfg.get(
+            "max_pages"),
         fetch_details=(
             fetch_details
             if fetch_details is not None
@@ -60,7 +61,8 @@ def run_buyrentkenya_ingestion(
     listings_path = run_dir / "listings.jsonl"
     with listings_path.open("w", encoding="utf-8") as handle:
         for listing in listings:
-            handle.write(json.dumps(listing.to_dict(), ensure_ascii=False) + "\n")
+            handle.write(json.dumps(listing.to_dict(),
+                         ensure_ascii=False) + "\n")
 
     metadata = {
         "source": source_name,

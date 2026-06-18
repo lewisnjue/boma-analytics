@@ -10,13 +10,16 @@ from boma_analytics.pipeline import run_buyrentkenya_ingestion
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Boma Analytics data ingestion")
+    parser = argparse.ArgumentParser(
+        description="Boma Analytics data ingestion")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    ingest = subparsers.add_parser("ingest", help="Run data ingestion pipelines")
+    ingest = subparsers.add_parser(
+        "ingest", help="Run data ingestion pipelines")
     ingest_sub = ingest.add_subparsers(dest="source", required=True)
 
-    brk = ingest_sub.add_parser("buyrentkenya", help="Scrape BuyRentKenya house listings")
+    brk = ingest_sub.add_parser(
+        "buyrentkenya", help="Scrape BuyRentKenya house listings")
     brk.add_argument(
         "--config",
         type=Path,
@@ -55,7 +58,8 @@ def main() -> None:
     args = parser.parse_args()
 
     logging.basicConfig(
-        level=logging.DEBUG if getattr(args, "verbose", False) else logging.INFO,
+        level=logging.DEBUG if getattr(
+            args, "verbose", False) else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
