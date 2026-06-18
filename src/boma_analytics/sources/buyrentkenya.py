@@ -1,4 +1,4 @@
-"""Fetch and parse house listings from BuyRentKenya."""
+"""BuyRentKenya source-specific ingestion logic."""
 
 from __future__ import annotations
 
@@ -83,8 +83,7 @@ class BuyRentKenyaClient:
             time.sleep(self.config.request_delay_seconds)
 
     def fetch_search_page(self, page: int = 1) -> BeautifulSoup:
-        url = self.search_url if page <= 1 else f"{
-            self.search_url}?page={page}"
+        url = self.search_url if page <= 1 else f"{self.search_url}?page={page}"
         logger.info("Fetching search page %s: %s", page, url)
         response = self._get(url)
         return BeautifulSoup(response.text, "html.parser")
@@ -124,8 +123,7 @@ class BuyRentKenyaClient:
         seen_ids: set[str] = set()
 
         for page in range(1, total_pages + 1):
-            soup = first_page if page == 1 else self.fetch_search_page(
-                page=page)
+            soup = first_page if page == 1 else self.fetch_search_page(page=page)
             cards = soup.select(".listing-card")
             logger.info("Page %s: found %s listing cards", page, len(cards))
 
@@ -190,8 +188,7 @@ def parse_listing_card(card: Tag, source_page: int) -> ListingRecord:
     listing_id = href.rstrip("/").split("-")[-1]
     url = urljoin("https://www.buyrentkenya.com", href)
 
-    title_el = card.select_one(
-        "span.text-title") or card.select_one("h2") or link
+    title_el = card.select_one("span.text-title") or card.select_one("h2") or link
     title = title_el.get_text(strip=True) if title_el else None
 
     price_el = card.select_one("p.text-title.text-xl") or card.find(

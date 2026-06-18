@@ -8,6 +8,11 @@ from boma_analytics.ingestion import (
     parse_listing_card,
     parse_price_kes,
 )
+from boma_analytics.sources.property24 import (
+    Property24Client,
+    Property24Config,
+    parse_property24_listing_card,
+)
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -47,3 +52,24 @@ def test_get_total_pages(search_page_html):
     client = BuyRentKenyaClient(config)
     soup = BeautifulSoup(search_page_html, "html.parser")
     assert client.get_total_pages(soup) == 102
+
+
+def test_parse_property24_listing_card():
+    from bs4 import BeautifulSoup
+
+    fixture_path = FIXTURES / "property24_card_snippet.html"
+    html = fixture_path.read_text(encoding="utf-8")
+    soup = BeautifulSoup(html, "html.parser")
+    card = soup.select_one(".p24_regularTile")
+
+    record = parse_property24_listing_card(card, source_page=1)
+
+    assert record.listing_id == "117331226"
+    assert record.title == "3 Bedroom Apartment / Flat"
+    assert record.price_kes == 40000000
+    assert record.location == "Westlands"
+    assert record.address == "23 David Osieli Rd, Westlands, Nairobi"
+    assert record.bedrooms == 3
+    assert record.bathrooms == 3
+    assert record.area_sqm == 155.0
+    assert "3 Bedrooms" in record.feature_badges
