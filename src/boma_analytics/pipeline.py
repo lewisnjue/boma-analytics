@@ -90,6 +90,7 @@ def run_buyrentkenya_ingestion(
     max_pages: int | None = None,
     fetch_details: bool | None = None,
     output_dir: Path | None = None,
+    listing_type: str | None = None,
 ) -> Path:
     project_root = Path(__file__).resolve().parents[2]
     config_path = config_path or project_root / "config" / "config.yaml"
@@ -97,9 +98,20 @@ def run_buyrentkenya_ingestion(
     output_cfg = config["output"]
 
     source_cfg = config["sources"]["buyrentkenya"]
+
+    lt = (listing_type or "houses").lower()
+    if lt not in {"houses", "apartments"}:
+        raise ValueError("listing_type must be 'houses' or 'apartments'")
+
+    if lt == "houses":
+        search_path = source_cfg.get("search_path")
+    else:
+        # fallback to main search_path if apartments path not configured
+        search_path = source_cfg.get("apartments_search_path", source_cfg.get("search_path"))
+
     scrape_config = BuyRentKenyaConfig(
         base_url=source_cfg["base_url"],
-        search_path=source_cfg["search_path"],
+        search_path=search_path,
         request_timeout=source_cfg["request_timeout"],
         request_delay_seconds=source_cfg["request_delay_seconds"],
         user_agent=source_cfg["user_agent"],
@@ -108,7 +120,8 @@ def run_buyrentkenya_ingestion(
     )
 
     client = BuyRentKenyaClient(scrape_config)
-    return _run_source_ingestion(
+    # store the listing type in output structure by creating a subfolder
+    run_dir = _run_source_ingestion(
         source_name="buyrentkenya",
         client=client,
         config=config,
@@ -118,6 +131,16 @@ def run_buyrentkenya_ingestion(
         fetch_details=fetch_details,
         output_dir=output_dir,
     )
+
+    # Move run_dir under a listing_type subfolder if not already
+    project_root = Path(__file__).resolve().parents[2]
+    base_raw = output_dir or project_root / output_cfg["raw_dir"] / "buyrentkenya"
+    typed_base = base_raw / lt
+    typed_dir = typed_base / run_dir.name
+    if not typed_dir.exists():
+        typed_base.mkdir(parents=True, exist_ok=True)
+        run_dir.rename(typed_dir)
+    return typed_dir
 
 
 def run_property24_ingestion(

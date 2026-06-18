@@ -36,6 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Limit number of search result pages to scrape",
     )
     brk.add_argument(
+        "--listing-type",
+        choices=["houses", "apartments"],
+        default="houses",
+        help="Which listing type to scrape for BuyRentKenya (houses or apartments)",
+    )
+    brk.add_argument(
         "--no-details",
         action="store_true",
         help="Skip fetching individual listing detail pages",
@@ -107,6 +113,7 @@ def main() -> None:
                 max_pages=args.max_pages,
                 fetch_details=not args.no_details,
                 output_dir=args.output_dir,
+                listing_type=getattr(args, "listing_type", None),
             )
         elif args.source == "property24":
             run_dir = run_property24_ingestion(
