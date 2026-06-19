@@ -1,119 +1,108 @@
-"""Run ingestion jobs and save raw data directly into MongoDB."""
-
-from __future__ import annotations
-
-import argparse
-import json
+import multiprocessing
+import time
 import logging
-import multiprocessing as mp
-from pathlib import Path
+import queue
+import threading
 from typing import Any
 
-from boma_analytics.db import save_listings
+from boma_analytics.db import get_collection, get_mongo_db
+from boma_analytics.sources.buyrentkenya import BuyRentKenyaClient, BuyRentKenyaConfig
+from boma_analytics.sources.property_pro import PropertyPro, PropertyProConfig
+from boma_analytics.sources.property24 import Property24Client, Property24Config
 
-logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(processName)s (%(threadName)s) - %(levelname)s - %(message)s'
+)
 
 
-def _worker(source: str, opts: dict[str, Any]) -> None:
-    try:
-        if source == "buyrentkenya":
-            from boma_analytics.pipeline import run_buyrentkenya_ingestion
+def mongo_writer_worker(db_queue: queue.Queue, collection: Any, source_name: str) -> None:
+    """Background thread worker that consumes items from the buffer queue 
 
-            logger.info("Starting BuyRentKenya job (listing_type=%s)...", opts.get("listing_type"))
-            run_dir = run_buyrentkenya_ingestion(
-                config_path=opts.get("config_path"),
-                max_pages=opts.get("max_pages"),
-                fetch_details=opts.get("fetch_details"),
-                output_dir=opts.get("output_dir"),
-                listing_type=opts.get("listing_type"),
-            )
-        elif source == "property24":
-            from boma_analytics.pipeline import run_property24_ingestion
-
-            logger.info("Starting Property24 job...")
-            run_dir = run_property24_ingestion(
-                config_path=opts.get("config_path"),
-                max_pages=opts.get("max_pages"),
-                fetch_details=opts.get("fetch_details"),
-                output_dir=opts.get("output_dir"),
-            )
+    and writes them to MongoDB without blocking the main scraper.
+    """
+    while True:
+        data = db_queue.get()
+        if data is None:
+            db_queue.task_done()
+            break
+        if isinstance(data, str):
+            document = {"description": data, "scraped_at": time.time()}
+            upsert_filter = {"description": data}
         else:
-            raise ValueError(f"Unsupported source: {source}")
+            document = dict(data)
+            document["scraped_at"] = time.time()
 
-        listings_file = Path(run_dir) / "listings.jsonl"
-        if listings_file.exists():
-            listings = []
-            with listings_file.open("r", encoding="utf-8") as handle:
-                for line in handle:
-                    listings.append(json.loads(line))
-            saved_count = save_listings(source, listings)
-            logger.info("Saved %s %s listings to MongoDB", saved_count, source)
-        else:
-            logger.warning("No listings file found at %s", listings_file)
-    except Exception:
-        logger.exception("Worker for %s failed", source)
+            if "listing_id" in document and document["listing_id"]:
+                upsert_filter = {"listing_id": document["listing_id"]}
+            else:
+                upsert_filter = {
+                    "Title": document.get("Title"),
+                    "Price (KSh)": document.get("Price (KSh)"),
+                    "Location": document.get("Location")
+                }
 
-
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Parallel ingestion runner with MongoDB storage")
-
-    parser.add_argument("--config", dest="config_path", type=Path, default=None,
-                        help="Path to config.yaml (default: config/config.yaml)")
-    parser.add_argument("--output-dir", dest="output_dir", type=Path, default=None,
-                        help="Override output directory for all jobs")
-
-    parser.add_argument("--buyrent-max-pages", type=int, default=None,
-                        help="Limit BuyRentKenya pages")
-    parser.add_argument("--buyrent-no-details", action="store_true",
-                        help="Skip BuyRentKenya detail pages")
-    parser.add_argument("--buyrent-listing-type", choices=["houses", "apartments"], default="houses",
-                        help="Which BuyRentKenya listing type to scrape")
-
-    parser.add_argument("--prop24-max-pages", type=int, default=None,
-                        help="Limit Property24 pages")
-    parser.add_argument("--prop24-no-details", action="store_true",
-                        help="Skip Property24 detail pages")
-
-    parser.add_argument("-v", "--verbose", action="store_true",
-                        help="Enable debug logging for runner and workers")
-
-    return parser.parse_args(argv)
+        try:
+            collection.update_one(
+                upsert_filter, {"$set": document}, upsert=True)
+        except Exception as e:
+            logging.error(f"Failed to write record to {source_name}: {e}")
+        db_queue.task_done()
 
 
-def main(argv: list[str] | None = None) -> None:
-    args = parse_args(argv)
-
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+def run_job(scraper_class: Any) -> None:
+    """Instantiates the scraper and streams data directly into an unblocking in-memory queue."""
+    if scraper_class.__name__ == "BuyRentKenyaClient":
+        scraper = scraper_class(BuyRentKenyaConfig())
+        source_name = "buyrentkenya"
+    elif scraper_class.__name__ == "Property24Client":
+        scraper = scraper_class(Property24Config())
+        source_name = "property24"
+    else:
+        scraper = scraper_class(PropertyProConfig())
+        source_name = "property_pro"
+    logging.info(f"Started scraping factory setup...")
+    db = get_mongo_db()
+    collection = get_collection(source_name, db=db)
+    db_queue = queue.Queue(maxsize=200)
+    writer_thread = threading.Thread(
+        target=mongo_writer_worker,
+        args=(db_queue, collection, source_name),
+        name="DB-Writer",
+        daemon=True  # Allows process to exit even if thread hangs
     )
-
-    buy_opts = {
-        "config_path": args.config_path,
-        "max_pages": args.buyrent_max_pages,
-        "fetch_details": not args.buyrent_no_details,
-        "output_dir": args.output_dir,
-        "listing_type": args.buyrent_listing_type,
-    }
-
-    prop_opts = {
-        "config_path": args.config_path,
-        "max_pages": args.prop24_max_pages,
-        "fetch_details": not args.prop24_no_details,
-        "output_dir": args.output_dir,
-    }
-
-    processes = []
-    for source, opts in (("buyrentkenya", buy_opts), ("property24", prop_opts)):
-        p = mp.Process(target=_worker, args=(source, opts), name=f"db-ingest-{source}")
-        p.start()
-        logger.info("Started process %s (pid=%s)", p.name, p.pid)
-        processes.append(p)
-
-    for p in processes:
-        p.join()
-        logger.info("Process %s exited with code %s", p.name, p.exitcode)
+    writer_thread.start()
+    for index, data in enumerate(scraper.scrape_all(), start=1):
+        db_queue.put(data)
+        if index % 50 == 0:
+            logging.info(f"Scraped and buffered {index} items...")
+    logging.info(
+        "Scraping loop completed. Waiting for buffer queue to flush to MongoDB...")
+    db_queue.put(None)
+    writer_thread.join()
+    logging.info(f"All records cleanly written to database for {source_name}!")
 
 
 if __name__ == "__main__":
-    main()
+    jobs = [Property24Client, PropertyPro, BuyRentKenyaClient]
+    processes = []
+    start_time = time.time()
+    logging.info(
+        "Initializing asynchronous decoupled multiprocessing pipeline...")
+
+    for job_class in jobs:
+        process_name = f"Process-{job_class.__name__}"
+        p = multiprocessing.Process(
+            target=run_job,
+            args=(job_class,),
+            name=process_name
+        )
+        processes.append(p)
+        p.start()
+
+    for p in processes:
+        p.join()
+
+    end_time = time.time()
+    logging.info(f"All parallel scraping jobs completed in {
+                 end_time - start_time:.2f} seconds.")

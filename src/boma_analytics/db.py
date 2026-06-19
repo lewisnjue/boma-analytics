@@ -58,31 +58,9 @@ def get_mongo_db() -> Database:
 
 
 def get_collection(source_name: str, db: Database | None = None) -> Collection:
-    db = db or get_mongo_db()
+    # Fixed the truth value testing bug here
+    if db is None:
+        db = get_mongo_db()
+
     collection_name = f"{source_name}_listings"
     return db[collection_name]
-
-
-def save_listings(
-    source_name: str,
-    listings: list[dict[str, Any]],
-    db: Database | None = None,
-) -> int:
-    collection = get_collection(source_name, db=db)
-    operations = []
-    for listing in listings:
-        if not listing.get("listing_id"):
-            continue
-        doc = {**listing}
-        doc["source"] = source_name
-        operations.append(
-            UpdateOne(
-                {"source": source_name, "listing_id": doc["listing_id"]},
-                {"$set": doc},
-                upsert=True,
-            )
-        )
-    if not operations:
-        return 0
-    result = collection.bulk_write(operations)
-    return int(result.upserted_count + result.modified_count)
