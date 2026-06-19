@@ -1,58 +1,25 @@
-name: "Database Ingest Workflow"
+name: "Data Ingestion"
 
 on:
-  workflow_dispatch:
-    inputs:
-      config-path:
-        description: "Config YAML path"
-        required: false
-        default: "config/config.yaml"
-      output-dir:
-        description: "Output directory for raw files"
-        required: false
-        default: ""
-      buyrent-max-pages:
-        description: "Limit BuyRentKenya pages"
-        required: false
-        default: ""
-      buyrent-no-details:
-        description: "Skip BuyRentKenya detail pages"
-        required: false
-        default: "false"
-      buyrent-listing-type:
-        description: "BuyRentKenya listing type"
-        required: false
-        default: "houses"
-      prop24-max-pages:
-        description: "Limit Property24 pages"
-        required: false
-        default: ""
-      prop24-no-details:
-        description: "Skip Property24 detail pages"
-        required: false
-        default: "false"
-      verbose:
-        description: "Enable verbose logging"
-        required: false
-        default: "false"
+  workflow_dispatch: # Allows manual triggering from the GitHub Actions tab
 
 jobs:
-  run-db-ingest:
+  ingestion:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Run DB ingestion action
-        uses: ./.github/actions/run-db-ingest
+      - name: Set up uv and Python 3.14
+        uses: astral-sh/setup-uv@v5
         with:
-          config-path: ${{ github.event.inputs.config-path }}
-          output-dir: ${{ github.event.inputs.output-dir }}
-          buyrent-max-pages: ${{ github.event.inputs.buyrent-max-pages }}
-          buyrent-no-details: ${{ github.event.inputs.buyrent-no-details }}
-          buyrent-listing-type: ${{ github.event.inputs.buyrent-listing-type }}
-          prop24-max-pages: ${{ github.event.inputs.prop24-max-pages }}
-          prop24-no-details: ${{ github.event.inputs.prop24-no-details }}
-          verbose: ${{ github.event.inputs.verbose }}
+          python-version: '3.14' # Provisions Python 3.14 automatically
+          enable-cache: true     # Caches virtualenv/dependencies for speed
+
+      - name: Run Ingestion Script
         env:
-          MONGODB_URL: ${{ secrets.MONGODB_URL }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        run: |
+          # Executes the specific database ingestion script using uv
+          uv run python src/boma_analytics/db_ingest.py
