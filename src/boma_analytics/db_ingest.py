@@ -8,7 +8,7 @@ from typing import Any
 from boma_analytics.db import get_collection, get_mongo_db
 from boma_analytics.sources.buyrentkenya import BuyRentKenyaClient, BuyRentKenyaConfig
 from boma_analytics.sources.property_pro import PropertyPro, PropertyProConfig
-from boma_analytics.sources.property24 import Property24Client, Property24Config
+# from boma_analytics.sources.property24 import Property24Client, Property24Config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -84,7 +84,7 @@ def run_job(scraper_class: Any) -> None:
 
 
 if __name__ == "__main__":
-    jobs = [Property24Client, PropertyPro, BuyRentKenyaClient]
+    jobs = [PropertyPro, BuyRentKenyaClient]
     processes = []
     start_time = time.time()
     logging.info(
