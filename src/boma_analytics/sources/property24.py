@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Property24Config:
     base_url: str = "https://www.property24.co.ke/"
-    request_delay_seconds: int = 1
+    request_delay_seconds: int = 5
     request_timeout: int = 10
     user_agent: str = (
         "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 "
