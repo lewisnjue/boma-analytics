@@ -1,3 +1,4 @@
+import glob
 import multiprocessing
 import time
 import logging
@@ -6,9 +7,11 @@ import threading
 from typing import Any
 
 from boma_analytics.db import get_collection, get_mongo_db
+from boma_analytics.sources import property24
+from boma_analytics.sources import property_pro
 from boma_analytics.sources.buyrentkenya import BuyRentKenyaClient, BuyRentKenyaConfig
 from boma_analytics.sources.property_pro import PropertyPro, PropertyProConfig
-# from boma_analytics.sources.property24 import Property24Client, Property24Config
+from boma_analytics.sources.property24 import Property24Client, Property24Config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,7 +21,6 @@ logging.basicConfig(
 
 def mongo_writer_worker(db_queue: queue.Queue, collection: Any, source_name: str) -> None:
     """Background thread worker that consumes items from the buffer queue 
-
     and writes them to MongoDB without blocking the main scraper.
     """
     while True:
@@ -50,32 +52,35 @@ def mongo_writer_worker(db_queue: queue.Queue, collection: Any, source_name: str
         db_queue.task_done()
 
 
-def run_job(scraper_class: Any) -> None:
-    """Instantiates the scraper and streams data directly into an unblocking in-memory queue."""
+def run_job(scraper_class: Any, config: Any) -> None:
+    """Instantiates the scraper with a specific configuration and streams data."""
     if scraper_class.__name__ == "BuyRentKenyaClient":
-        scraper = scraper_class(BuyRentKenyaConfig())
         source_name = "buyrentkenya"
     elif scraper_class.__name__ == "Property24Client":
-        scraper = scraper_class(Property24Config())
         source_name = "property24"
     else:
-        scraper = scraper_class(PropertyProConfig())
         source_name = "property_pro"
-    logging.info(f"Started scraping factory setup...")
+
+    scraper = scraper_class(config)
+
+    logging.info(f"Started scraping factory setup for {source_name}...")
     db = get_mongo_db()
     collection = get_collection(source_name, db=db)
-    db_queue = queue.Queue(maxsize=200)
+    db_queue = queue.Queue(maxsize=1024)
+
     writer_thread = threading.Thread(
         target=mongo_writer_worker,
         args=(db_queue, collection, source_name),
         name="DB-Writer",
-        daemon=True  # Allows process to exit even if thread hangs
+        daemon=True
     )
     writer_thread.start()
+
     for index, data in enumerate(scraper.scrape_all(), start=1):
         db_queue.put(data)
         if index % 50 == 0:
             logging.info(f"Scraped and buffered {index} items...")
+
     logging.info(
         "Scraping loop completed. Waiting for buffer queue to flush to MongoDB...")
     db_queue.put(None)
@@ -84,17 +89,28 @@ def run_job(scraper_class: Any) -> None:
 
 
 if __name__ == "__main__":
-    jobs = [PropertyPro, BuyRentKenyaClient]
+    # Updated to 4 explicit jobs (1 PropertyPro, 2 unique BuyRentKenya paths, 1 Property24)
+    jobs = [
+        (PropertyPro, PropertyProConfig()),
+        (BuyRentKenyaClient, BuyRentKenyaConfig()),
+        (BuyRentKenyaClient, BuyRentKenyaConfig(
+            search_path="/flats-apartments-for-sale")),
+        (Property24Client, Property24Config())
+    ]
+
     processes = []
     start_time = time.time()
     logging.info(
         "Initializing asynchronous decoupled multiprocessing pipeline...")
 
-    for job_class in jobs:
-        process_name = f"Process-{job_class.__name__}"
+    for index, (job_class, job_config) in enumerate(jobs, start=1):
+        path_suffix = "custom-path" if hasattr(
+            job_config, 'search_path') and job_config.search_path else "default"
+        process_name = f"Process-{job_class.__name__}-{path_suffix}-{index}"
+
         p = multiprocessing.Process(
             target=run_job,
-            args=(job_class,),
+            args=(job_class, job_config),
             name=process_name
         )
         processes.append(p)

@@ -21,7 +21,7 @@ class PropertyProConfig:
     domain_url: str = "https://www.propertypro.co.ke"
     search_path: str = "/property-for-sale/house"
     request_timeout: int = 15
-    request_delay_seconds: float = 1.0
+    request_delay_seconds: float = 0.0
     user_agent: str = (
         "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"

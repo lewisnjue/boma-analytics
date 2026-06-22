@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Property24Config:
     base_url: str = "https://www.property24.co.ke/"
-    request_delay_seconds: int = 5
-    request_timeout: int = 10
+    request_delay_seconds: int = 0
+    request_timeout: int = 100
     user_agent: str = (
         "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -32,12 +32,14 @@ class Property24Client:
     def __init__(self, config: Property24Config = None) -> None:
         self.config = config or Property24Config()
         self.session = requests.Session()
+        """
         self.session.headers.update(
             {
                 **DEFAULT_HEADERS,
                 "User-Agent": self.config.user_agent,
             }
         )
+        """
 
     def _get(self, url: str) -> BeautifulSoup:
         if self.config.request_delay_seconds > 0:
