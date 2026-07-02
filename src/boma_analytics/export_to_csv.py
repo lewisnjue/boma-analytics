@@ -1,8 +1,8 @@
 """Export preprocessed real estate listings from MongoDB to a clean modeling CSV."""
+
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 import pandas as pd
 
@@ -25,18 +25,15 @@ def export_collection_to_csv(output_path: Path) -> None:
     collection = get_collection(COLLECTION_NAME, db=db)
 
     # Fetch all documents, projecting out fields irrelevant to training
-    projection = {
-        "_id": 0,
-        "source_id": 0,
-        "processed_at": 0,
-        "scraped_at": 0
-    }
+    projection = {"_id": 0, "source_id": 0, "processed_at": 0, "scraped_at": 0}
 
     cursor = collection.find({}, projection)
     documents = list(cursor)
 
     if not documents:
-        print("Warning: No records found in the unified collection. Did you run the preprocessor first?")
+        print(
+            "Warning: No records found in the unified collection. Did you run the preprocessor first?"
+        )
         return
 
     print(f"Retrieved {len(documents)} records. Converting to DataFrame...")
@@ -46,8 +43,7 @@ def export_collection_to_csv(output_path: Path) -> None:
 
     # Quick structural alignment (Ensuring target column is the first feature for convenience)
     if "price_ksh" in df.columns:
-        cols = ["price_ksh"] + \
-            [col for col in df.columns if col != "price_ksh"]
+        cols = ["price_ksh"] + [col for col in df.columns if col != "price_ksh"]
         df = df[cols]
 
     # Save to CSV using the absolute Path object
