@@ -4,11 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: boma_analytics
+    ports:
+      - "8888:8888"
     volumes:
-      # Mounts your local project directory into the container
       - .:/opt/app
     working_dir: /opt/app
-    # Overrides default command to keep container running indefinitely
-    command: tail -f /dev/null
-    stdin_open: true
-    tty: true
+    entrypoint: jupyter notebook --ip=0.0.0.0 --port=8888 --allow-root --no-browser

@@ -1,5 +1,7 @@
 """BuyRentKenya source-specific ingestion logic."""
+
 from __future__ import annotations
+
 import json
 import logging
 import re
@@ -57,9 +59,11 @@ class BuyRentKenyaClient:
         return BeautifulSoup(response.text, "html.parser")
 
     def fetch_search_page(self, page: int = 1) -> BeautifulSoup:
-        # Fixed the multiline formatting issue here to avoid syntax errors
-        url = self.search_url if page <= 1 else f"{
-            self.search_url}?page={page}"
+        url = (
+            self.search_url
+            if page <= 1
+            else f"{self.search_url}?page={page}"
+        )
         logger.info("Fetching search page %s: %s", page, url)
         return self._get(url)
 
@@ -102,17 +106,18 @@ class BuyRentKenyaClient:
                     yield card_data
 
     def extract_listing_features(self, card: Any) -> dict[str, Any]:
-        features = {}
+        features: dict[str, Any] = {}
 
         # 1. Base Unique Identifier
         features["listing_id"] = card.get("id", "").replace("listing-", "")
 
-        # 2. Extract basic info from data attributes
+        # 2. Extract basic info from card data attributes
         bi_element = card.find(attrs={"data-bi-listing-price": True})
         if bi_element:
             features["price"] = int(bi_element.get("data-bi-listing-price", 0))
             features["property_type"] = bi_element.get(
-                "data-bi-listing-category")
+                "data-bi-listing-category"
+            )
         else:
             features["price"] = None
             features["property_type"] = None
@@ -121,12 +126,115 @@ class BuyRentKenyaClient:
         beds_span = card.find(attrs={"data-cy": "card-bedroom_count"})
         if beds_span:
             beds_match = re.search(r"\d+", beds_span.text)
-            features["bedrooms"] = int(
-                beds_match.group()) if beds_match else None
+            features["bedrooms"] = (
+                int(beds_match.group()) if beds_match else None
+            )
         else:
             features["bedrooms"] = None
 
-        # 4. Extract detailed features from embedded Alpine/GA4 JSON
+        # 4. Extract detail URL for deep scraping
+        link_element = card.find(
+            "a", attrs={"data-cy": "listing-information-link"}
+        )
+        if link_element and link_element.has_attr("href"):
+            relative_url = str(link_element["href"])
+            features["property_url"] = urljoin(
+                self.config.base_url, relative_url
+            )
+        else:
+            features["property_url"] = None
+
+        # 5. Deep Scraping (Detail Page)
+        if features.get("property_url"):
+            try:
+                # Reuse self._get to respect session headers, timeout, and delay limits
+                detail_soup = self._get(features["property_url"])
+
+                # --- Description ---
+                description_element = detail_soup.find(
+                    id="truncatedDescription"
+                )
+                if description_element:
+                    features["description"] = description_element.get_text(
+                        strip=True
+                    )
+
+                # --- Basic Info Section (Bedrooms, Bathrooms, Size, Created At, etc.) ---
+                info_section = detail_soup.find(
+                    "section", attrs={"data-cy": "basic-info-section"}
+                )
+                if info_section:
+                    created_at_div = info_section.find("div", class_="py-2")
+                    if created_at_div:
+                        created_text = created_at_div.get_text(strip=True)
+                        features["created_at"] = created_text.replace(
+                            "Created At:", ""
+                        ).strip()
+
+                    rows = info_section.find_all(
+                        "div", class_=lambda c: c and "border-b" in c
+                    )
+                    for row in rows:
+                        spans = row.find_all("span")
+                        if len(spans) >= 2:
+                            key = (
+                                spans[0]
+                                .get_text(strip=True)
+                                .rstrip(":")
+                                .lower()
+                                .replace(" ", "_")
+                            )
+                            raw_val = spans[1].get_text(strip=True)
+
+                            # Cast bedrooms/bathrooms to int if numeric
+                            if key in ("bedrooms", "bathrooms"):
+                                match = re.search(r"\d+", raw_val)
+                                if match:
+                                    features[key] = int(match.group())
+                            else:
+                                features[key] = raw_val
+
+                # --- Utilities / Amenities Section ---
+                amenities_section = detail_soup.find(
+                    "section",
+                    attrs={"data-cy": "listing-amenities-component"},
+                )
+                if amenities_section:
+                    feature_blocks = amenities_section.find_all(
+                        "div", class_=lambda c: c and "px-3" in c and "py-3" in c
+                    )
+
+                    for block in feature_blocks:
+                        title_elem = block.find(
+                            "span", class_=lambda c: c and "font-semibold" in c
+                        )
+                        if title_elem:
+                            category_key = (
+                                title_elem.get_text(strip=True)
+                                .lower()
+                                .replace(" ", "_")
+                            )
+
+                            pill_container = block.find(
+                                "div", class_=lambda c: c and "flex-wrap" in c
+                            )
+                            if pill_container:
+                                items = [
+                                    span.get_text(strip=True)
+                                    for span in pill_container.find_all("span")
+                                    if span.get_text(strip=True)
+                                ]
+                                if items:
+                                    features[category_key] = items
+
+            except Exception as e:
+                logger.warning(
+                    "Failed to scrape detail page for %s: %s",
+                    features["property_url"],
+                    e,
+                )
+
+        # 6. Extract detailed features from embedded Alpine/GA4 JSON
         x_init_attr = card.get("x-init", "")
         json_match = re.search(r"JSON\.parse\('(.*?)'\)", x_init_attr)
 
@@ -140,7 +248,8 @@ class BuyRentKenyaClient:
                 features["city"] = ga4_data.get("propertyCity")
                 features["area"] = ga4_data.get("propertyArea")
                 features["days_on_market"] = ga4_data.get(
-                    "propertyDaysInMarket")
+                    "propertyDaysInMarket"
+                )
                 features["seller_type"] = ga4_data.get("sellerType")
 
             except (json.JSONDecodeError, IndexError):
