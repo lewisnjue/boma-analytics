@@ -1,4 +1,3 @@
-import glob
 import multiprocessing
 import time
 import logging
@@ -7,8 +6,6 @@ import threading
 from typing import Any
 
 from boma_analytics.db import get_collection, get_mongo_db
-from boma_analytics.sources import property24
-from boma_analytics.sources import property_pro
 from boma_analytics.sources.buyrentkenya import BuyRentKenyaClient, BuyRentKenyaConfig
 from boma_analytics.sources.property_pro import PropertyPro, PropertyProConfig
 from boma_analytics.sources.property24 import Property24Client, Property24Config

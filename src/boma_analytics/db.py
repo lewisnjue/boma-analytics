@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
 
-from pymongo import MongoClient, UpdateOne
+from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 
